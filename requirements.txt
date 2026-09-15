@@ -14,3 +14,4 @@ seqeval>=1.2.2
 scikit-learn>=1.4.0
 mlflow>=2.11.0
 pytest>=8.0.0
+reportlab>=4.0.0

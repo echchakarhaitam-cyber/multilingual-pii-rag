@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Generated test fixtures (see scripts/generate_test_fixtures.py)
+tests/fixtures/
+
 # C extensions
 *.so
 
