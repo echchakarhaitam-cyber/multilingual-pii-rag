@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from docx import Document
+from docx.opc.exceptions import PackageNotFoundError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
@@ -75,8 +77,43 @@ def load_pdf(path: str | Path) -> list[dict[str, Any]]:
 
 
 def load_docx(path: str | Path) -> list[dict[str, Any]]:
-    """TODO (Week 2): implement with python-docx."""
-    raise NotImplementedError("Week 2: implement DOCX loading with python-docx")
+    """Extract paragraph text from a DOCX, flagging Arabic RTL corruption risk."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"DOCX not found: {path}")
+
+    try:
+        document = Document(str(path))
+    except PackageNotFoundError as exc:
+        raise ValueError(f"Unreadable DOCX: {path}") from exc
+
+    paragraphs = [p.text for p in document.paragraphs]
+    text = "\n".join(paragraphs)
+
+    if not text.strip():
+        raise ValueError(f"No text extracted from DOCX: {path}")
+
+    has_arabic, corruption_risk = _assess_arabic_corruption(text)
+
+    if corruption_risk:
+        logger.warning(
+            "Possible Arabic text corruption in %s "
+            "(replacement characters exceed 10%% of Arabic character count)",
+            path,
+        )
+
+    return [
+        {
+            "text": text,
+            "source": str(path),
+            "page": None,
+            "metadata": {
+                "total_paragraphs": len(paragraphs),
+                "has_arabic": has_arabic,
+                "corruption_risk": corruption_risk,
+            },
+        }
+    ]
 
 
 def load_html(path_or_url: str) -> list[dict[str, Any]]:
