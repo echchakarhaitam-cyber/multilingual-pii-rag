@@ -8,10 +8,15 @@ import re
 from pathlib import Path
 from typing import Any
 
+import requests
+from bs4 import BeautifulSoup
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
+
+BOILERPLATE_TAGS = ("nav", "header", "footer", "script", "style", "aside")
+URL_FETCH_TIMEOUT_SECONDS = 10
 
 logger = logging.getLogger(__name__)
 
@@ -117,5 +122,56 @@ def load_docx(path: str | Path) -> list[dict[str, Any]]:
 
 
 def load_html(path_or_url: str) -> list[dict[str, Any]]:
-    """TODO (Week 2): implement with BeautifulSoup, from scratch."""
-    raise NotImplementedError("Week 2: implement HTML loading with BeautifulSoup")
+    """Extract text from local HTML or a URL, stripping boilerplate and
+    flagging Arabic RTL corruption risk."""
+    if path_or_url.startswith(("http://", "https://")):
+        try:
+            response = requests.get(path_or_url, timeout=URL_FETCH_TIMEOUT_SECONDS)
+            response.raise_for_status()
+        except requests.exceptions.Timeout as exc:
+            raise ValueError(
+                f"Timeout fetching URL after {URL_FETCH_TIMEOUT_SECONDS}s: {path_or_url}"
+            ) from exc
+        except requests.exceptions.RequestException as exc:
+            raise ValueError(f"Unreachable URL: {path_or_url}") from exc
+
+        html_content = response.text
+        source = path_or_url
+    else:
+        path = Path(path_or_url)
+        if not path.exists():
+            raise FileNotFoundError(f"HTML file not found: {path}")
+        html_content = path.read_text(encoding="utf-8")
+        source = str(path)
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    for tag_name in BOILERPLATE_TAGS:
+        for tag in soup.find_all(tag_name):
+            tag.decompose()
+
+    text = soup.get_text(separator="\n", strip=True)
+
+    if not text.strip():
+        raise ValueError(f"No text extracted from HTML: {source}")
+
+    has_arabic, corruption_risk = _assess_arabic_corruption(text)
+
+    if corruption_risk:
+        logger.warning(
+            "Possible Arabic text corruption in %s "
+            "(replacement characters exceed 10%% of Arabic character count)",
+            source,
+        )
+
+    return [
+        {
+            "text": text,
+            "source": source,
+            "page": None,
+            "metadata": {
+                "has_arabic": has_arabic,
+                "corruption_risk": corruption_risk,
+                "content_length": len(text),
+            },
+        }
+    ]

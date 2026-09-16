@@ -22,6 +22,9 @@ EXPECTED_FIXTURES = [
     "sample_empty.docx",
     "sample_fr.pdf",
     "sample_ar.pdf",
+    "sample_fr.html",
+    "sample_ar.html",
+    "sample_empty.html",
 ]
 
 FRENCH_PARAGRAPHS = [
@@ -35,6 +38,26 @@ ARABIC_PARAGRAPHS = [
     "رقم هاتفي هو 0612345678 وبريدي الإلكتروني ahmed@example.com.",
     "أعمل مهندس برمجيات منذ خمس سنوات.",
 ]
+
+HTML_HEAD = (
+    '<head><meta charset="utf-8"><title>Fixture</title>'
+    "<style>body { color: black; }</style>"
+    '<script>console.log("tracking pixel");</script>'
+    "</head>"
+)
+# No <title>: get_text() extracts head/title text too, since only
+# BOILERPLATE_TAGS are stripped -- the empty fixture must have nothing left.
+EMPTY_HTML_HEAD = (
+    "<head><style>body { color: black; }</style>"
+    '<script>console.log("tracking pixel");</script>'
+    "</head>"
+)
+HTML_BOILERPLATE = (
+    "<nav>Home About Contact</nav>"
+    "<header>Site Header Menu</header>"
+    "<aside>Related links sidebar</aside>"
+)
+HTML_FOOTER = "<footer>Copyright 2026 Site Footer</footer>"
 
 # Arabic-capable TrueType fonts to try, in order, across common platforms.
 CANDIDATE_ARABIC_FONTS = [
@@ -91,10 +114,34 @@ def _generate_pdf_fixtures() -> None:
     ar_canvas.save()
 
 
+def _build_html_page(main_content: str, lang: str) -> str:
+    return (
+        f'<!DOCTYPE html><html lang="{lang}">{HTML_HEAD}<body>'
+        f"{HTML_BOILERPLATE}<main>{main_content}</main>{HTML_FOOTER}"
+        "</body></html>"
+    )
+
+
+def _generate_html_fixtures() -> None:
+    french_main = "\n".join(f"<p>{paragraph}</p>" for paragraph in FRENCH_PARAGRAPHS)
+    arabic_main = "\n".join(f"<p>{paragraph}</p>" for paragraph in ARABIC_PARAGRAPHS)
+
+    (FIXTURES_DIR / "sample_fr.html").write_text(
+        _build_html_page(french_main, lang="fr"), encoding="utf-8"
+    )
+    (FIXTURES_DIR / "sample_ar.html").write_text(
+        _build_html_page(arabic_main, lang="ar"), encoding="utf-8"
+    )
+
+    empty_html = f"<!DOCTYPE html><html>{EMPTY_HTML_HEAD}<body>{HTML_BOILERPLATE}{HTML_FOOTER}</body></html>"
+    (FIXTURES_DIR / "sample_empty.html").write_text(empty_html, encoding="utf-8")
+
+
 def generate_fixtures() -> None:
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     _generate_docx_fixtures()
     _generate_pdf_fixtures()
+    _generate_html_fixtures()
 
 
 if __name__ == "__main__":
